@@ -1,6 +1,6 @@
 import GameEvent from "../../../Wolfie2D/Events/GameEvent";
 import { GameEventType } from "../../../Wolfie2D/Events/GameEventType";
-import { PlayerStates, PlayerTweens } from "../PlayerController";
+import { PlayerStates, PlayerTweens, PlayerAnimations } from "../PlayerController";
 
 import PlayerState from "./PlayerState";
 
@@ -13,6 +13,12 @@ export default class Jump extends PlayerState {
         this.parent.velocity.y = -200;
         // Play the jump sound for the player
 		this.emitter.fireEvent(GameEventType.PLAY_SOUND, {key: jumpAudio, loop: false, holdReference: false});
+        // Play the jump animation based on the direction the player is facing
+        if (this.parent.velocity.x < 0) {
+            this.owner.animation.play(PlayerAnimations.JUMP_LEFT);
+        } else {
+            this.owner.animation.play(PlayerAnimations.JUMP_RIGHT);
+        }
 	}
 
 	public update(deltaT: number): void {

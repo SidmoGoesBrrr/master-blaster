@@ -16,15 +16,23 @@ import MathUtils from "../../Wolfie2D/Utils/MathUtils";
 import { MBEvents } from "../MBEvents";
 import Dead from "./PlayerStates/Dead";
 
-// TODO play your heros animations
-
 /**
  * Animation keys for the player spritesheet
  */
 export const PlayerAnimations = {
     IDLE: "IDLE",
-    WALK: "WALK",
-    JUMP: "JUMP",
+    WALK_LEFT: "WALK_LEFT",
+    WALK_RIGHT: "WALK_RIGHT",
+    JUMP_LEFT: "JUMP_LEFT",
+    JUMP_RIGHT: "JUMP_RIGHT",
+    ATTACK_LEFT: "ATTACK_LEFT",
+    ATTACK_RIGHT: "ATTACK_RIGHT",
+    FALL_LEFT: "FALL_LEFT",
+    FALL_RIGHT: "FALL_RIGHT",
+    TAKE_DAMAGE_LEFT: "TAKE_DAMAGE_LEFT",
+    TAKE_DAMAGE_RIGHT: "TAKE_DAMAGE_RIGHT",
+    DYING: "DYING",
+    DEAD: "DEAD",
 } as const
 
 /**
@@ -112,6 +120,12 @@ export default class PlayerController extends StateMachineAI {
         if (Input.isPressed(MBControls.ATTACK) && !this.weapon.isSystemRunning()) {
             // Start the particle system at the player's current position
             this.weapon.startSystem(500, 0, this.owner.position);
+            // Play the attack animation based on the direction the player is facing
+            if (this.faceDir.x < 0) {
+                this.owner.animation.play(PlayerAnimations.ATTACK_LEFT);
+            } else {
+                this.owner.animation.play(PlayerAnimations.ATTACK_RIGHT);
+            }
         }
 
 	}
