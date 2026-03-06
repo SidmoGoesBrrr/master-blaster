@@ -21,6 +21,7 @@ import Dead from "./PlayerStates/Dead";
  */
 export const PlayerAnimations = {
     IDLE: "IDLE",
+    IDLE_RIGHT: "IDLE_RIGHT",
     WALK_LEFT: "WALK_LEFT",
     WALK_RIGHT: "WALK_RIGHT",
     JUMP_LEFT: "JUMP_LEFT",
@@ -64,6 +65,12 @@ export default class PlayerController extends StateMachineAI {
     /** Health and max health for the player */
     protected _health: number;
     protected _maxHealth: number;
+
+    /** Whether the player is facing left */
+    protected _facingLeft: boolean = false;
+
+    /** Skip fall damage on the first landing after spawn (avoids spawn damage) */
+    protected _spawnDamageImmunity: boolean = true;
 
     /** The players game node */
     protected owner: MBAnimatedSprite;
@@ -118,6 +125,8 @@ export default class PlayerController extends StateMachineAI {
 
         // If the player hits the attack button and the weapon system isn't running, restart the system and fire!
         if (Input.isPressed(MBControls.ATTACK) && !this.weapon.isSystemRunning()) {
+            // Set the fire direction toward the mouse position at the moment of attack
+            this.weapon.setFireDirection(this.faceDir);
             // Start the particle system at the player's current position
             this.weapon.startSystem(500, 0, this.owner.position);
             // Play the attack animation based on the direction the player is facing
@@ -132,6 +141,12 @@ export default class PlayerController extends StateMachineAI {
 
     public get velocity(): Vec2 { return this._velocity; }
     public set velocity(velocity: Vec2) { this._velocity = velocity; }
+
+    public get facingLeft(): boolean { return this._facingLeft; }
+    public set facingLeft(value: boolean) { this._facingLeft = value; }
+
+    public get spawnDamageImmunity(): boolean { return this._spawnDamageImmunity; }
+    public set spawnDamageImmunity(value: boolean) { this._spawnDamageImmunity = value; }
 
     public get speed(): number { return this._speed; }
     public set speed(speed: number) { this._speed = speed; }

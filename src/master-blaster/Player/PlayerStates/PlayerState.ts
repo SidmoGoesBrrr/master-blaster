@@ -35,10 +35,10 @@ export default abstract class PlayerState extends State {
 	}
 
 	public update(deltaT: number): void {
-        // This updates the direction the player sprite is facing (left or right)
+        // Track the direction the player is facing (used for idle animation flipping)
         let direction = this.parent.inputDir;
 		if(direction.x !== 0){
-			this.owner.invertX = MathUtils.sign(direction.x) < 0;
+			this.parent.facingLeft = direction.x < 0;
 		}
     }
 

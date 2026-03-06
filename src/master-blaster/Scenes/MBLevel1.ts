@@ -30,6 +30,9 @@ export default class Level1 extends MBLevel {
     public static readonly TILE_DESTROYED_KEY = "TILE_DESTROYED";
     public static readonly TILE_DESTROYED_PATH = "game_assets/sounds/switch.wav";
 
+    public static readonly DYING_AUDIO_KEY = "PLAYER_DYING";
+    public static readonly DYING_AUDIO_PATH = "game_assets/sounds/fall_death.mp3";
+
     public static readonly LEVEL_END = new AABB(new Vec2(224, 232), new Vec2(24, 16));
 
     public constructor(viewport: Viewport, sceneManager: SceneManager, renderingManager: RenderingManager, options: Record<string, any>) {
@@ -50,6 +53,7 @@ export default class Level1 extends MBLevel {
         this.levelMusicKey = Level1.LEVEL_MUSIC_KEY
         this.jumpAudioKey = Level1.JUMP_AUDIO_KEY;
         this.tileDestroyedAudioKey = Level1.TILE_DESTROYED_KEY;
+        this.dyingAudioKey = Level1.DYING_AUDIO_KEY;
 
         // Level end size and position
         this.levelEndPosition = new Vec2(128, 232).mult(this.tilemapScale);
@@ -68,13 +72,19 @@ export default class Level1 extends MBLevel {
         this.load.audio(this.levelMusicKey, Level1.LEVEL_MUSIC_PATH);
         this.load.audio(this.jumpAudioKey, Level1.JUMP_AUDIO_PATH);
         this.load.audio(this.tileDestroyedAudioKey, Level1.TILE_DESTROYED_PATH);
+        this.load.audio(this.dyingAudioKey, Level1.DYING_AUDIO_PATH);
     }
 
     /**
      * Unload resources for level 1
      */
     public unloadScene(): void {
-        // TODO decide which resources to keep/cull 
+        // Keep resources that are reused in Level2
+        this.load.keepSpritesheet(this.playerSpriteKey);
+        this.load.keepAudio(this.jumpAudioKey);
+        this.load.keepAudio(this.tileDestroyedAudioKey);
+        this.load.keepAudio(this.dyingAudioKey);
+        this.load.keepAudio(this.levelMusicKey);
     }
 
     public startScene(): void {

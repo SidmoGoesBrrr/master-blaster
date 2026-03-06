@@ -18,6 +18,11 @@ export const MBEvents = {
     HEALTH_CHANGE: "HEALTH_CHANGE",
 
     // The event sent when the player dies. Gets sent after the player's death animation
-    PLAYER_DEAD: "PLAYER_DEAD"
-    
+    PLAYER_DEAD: "PLAYER_DEAD",
+
+    /**
+     * Fired when a weapon particle collides with the destructible tilemap.
+     * Has data: { node: number (particle id), other: number (tilemap id) }
+     */
+    PARTICLE_HIT: "PARTICLE_HIT"
 } as const;

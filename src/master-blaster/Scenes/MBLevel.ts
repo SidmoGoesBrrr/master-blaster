@@ -24,6 +24,7 @@ import { MBEvents } from "../MBEvents";
 import { MBPhysicsGroups } from "../MBPhysicsGroups";
 import MBFactoryManager from "../Factory/MBFactoryManager";
 import MainMenu from "./MainMenu";
+import LevelFailedScene from "./LevelFailedScene";
 import Particle from "../../Wolfie2D/Nodes/Graphics/Particle";
 
 /**
@@ -71,6 +72,8 @@ export default abstract class MBLevel extends Scene {
     protected nextLevel: new (...args: any) => Scene;
     protected levelEndTimer: Timer;
     protected levelEndLabel: Label;
+    /** Text shown when level is complete (e.g. "Level Complete" or "Game Ended") */
+    protected levelEndLabelText: string = "Level Complete";
 
     // Level end transition timer and graphic
     protected levelTransitionTimer: Timer;
@@ -91,10 +94,22 @@ export default abstract class MBLevel extends Scene {
     protected levelMusicKey: string;
     protected jumpAudioKey: string;
     protected tileDestroyedAudioKey: string;
+    protected dyingAudioKey: string;
 
     public constructor(viewport: Viewport, sceneManager: SceneManager, renderingManager: RenderingManager, options: Record<string, any>) {
         super(viewport, sceneManager, renderingManager, {...options, physics: {
-            // TODO configure the collision groups and collision map
+            groupNames: [
+                MBPhysicsGroups.GROUND,
+                MBPhysicsGroups.PLAYER,
+                MBPhysicsGroups.PLAYER_WEAPON,
+                MBPhysicsGroups.DESTRUCTABLE
+            ],
+            collisions: [
+                [0, 1, 1, 0],
+                [1, 0, 0, 1],
+                [1, 0, 0, 1],
+                [0, 1, 1, 0],
+            ]
          }});
         this.add = new MBFactoryManager(this, this.tilemaps);
     }
@@ -162,8 +177,9 @@ export default abstract class MBLevel extends Scene {
                 Input.enableInput();
                 break;
             }
-            // When the level ends, change the scene to the next level
+            // When the level ends, stop the music and change the scene to the next level
             case MBEvents.LEVEL_END: {
+                this.emitter.fireEvent(GameEventType.STOP_SOUND, {key: this.levelMusicKey});
                 this.sceneManager.changeToScene(this.nextLevel);
                 break;
             }
@@ -172,7 +188,12 @@ export default abstract class MBLevel extends Scene {
                 break;
             }
             case MBEvents.PLAYER_DEAD: {
-                this.sceneManager.changeToScene(MainMenu);
+                this.sceneManager.changeToScene(LevelFailedScene);
+                break;
+            }
+            case MBEvents.PARTICLE_HIT: {
+                // node = particle id, other = tilemap id (per TriggerEventData)
+                this.handleParticleHit(event.data.get("node"));
                 break;
             }
             // Default: Throw an error! No unhandled events allowed.
@@ -209,7 +230,8 @@ export default abstract class MBLevel extends Scene {
                     // If the tile is collideable -> check if this particle is colliding with the tile
                     if(tilemap.isTileCollidable(col, row) && this.particleHitTile(tilemap, particle, col, row)){
                         this.emitter.fireEvent(GameEventType.PLAY_SOUND, { key: this.tileDestroyedAudioKey, loop: false, holdReference: false });
-                        // TODO Destroy the tile
+                        // Destroy the tile by setting it to 0 (empty)
+                        tilemap.setTileAtRowCol(new Vec2(col, row), 0);
                     }
                 }
             }
@@ -226,8 +248,19 @@ export default abstract class MBLevel extends Scene {
      * @returns true of the particle hit the tile; false otherwise
      */
     protected particleHitTile(tilemap: OrthogonalTilemap, particle: Particle, col: number, row: number): boolean {
-        // TODO detect whether a particle hit a tile
-        return;
+        // Get the scaled tile size
+        let tileSize = tilemap.getTileSize();
+        let halfTileSize = tileSize.scaled(0.5);
+
+        // Calculate the center of the tile in world coordinates
+        let tileCenterX = col * tileSize.x + halfTileSize.x;
+        let tileCenterY = row * tileSize.y + halfTileSize.y;
+
+        // Create an AABB for the tile
+        let tileAABB = new AABB(new Vec2(tileCenterX, tileCenterY), halfTileSize.clone());
+
+        // Check if the particle's swept rect overlaps the tile's AABB
+        return particle.sweptRect.overlaps(tileAABB);
     }
 
     /**
@@ -287,10 +320,14 @@ export default abstract class MBLevel extends Scene {
         this.walls = this.getTilemap(this.wallsLayerKey) as OrthogonalTilemap;
         this.destructable = this.getTilemap(this.destructibleLayerKey) as OrthogonalTilemap;
 
-        // Add physicss to the wall layer
+        // Add physics to the wall layer, then re-assign its group (addPhysics resets group to -1)
         this.walls.addPhysics();
-        // Add physics to the destructible layer of the tilemap
+        this.walls.setGroup(MBPhysicsGroups.GROUND);
+        // Add physics to the destructible layer, then re-assign its group
         this.destructable.addPhysics();
+        this.destructable.setGroup(MBPhysicsGroups.DESTRUCTABLE);
+        // Fire PARTICLE_HIT when weapon particles collide with destructible tiles
+        this.destructable.setTrigger(MBPhysicsGroups.PLAYER_WEAPON, MBEvents.PARTICLE_HIT, null);
     }
     /**
      * Handles all subscriptions to events
@@ -301,6 +338,7 @@ export default abstract class MBLevel extends Scene {
         this.receiver.subscribe(MBEvents.LEVEL_END);
         this.receiver.subscribe(MBEvents.HEALTH_CHANGE);
         this.receiver.subscribe(MBEvents.PLAYER_DEAD);
+        this.receiver.subscribe(MBEvents.PARTICLE_HIT);
     }
     /**
      * Adds in any necessary UI to the game
@@ -323,23 +361,24 @@ export default abstract class MBLevel extends Scene {
 		this.healthBarBg.size = new Vec2(300, 25);
 		this.healthBarBg.borderColor = Color.BLACK;
 
-        // End of level label (start off screen)
-        this.levelEndLabel = <Label>this.add.uiElement(UIElementType.LABEL, MBLayers.UI, { position: new Vec2(-300, 100), text: "Level Complete" });
-        this.levelEndLabel.size.set(1200, 60);
-        this.levelEndLabel.borderRadius = 0;
-        this.levelEndLabel.backgroundColor = new Color(34, 32, 52);
-        this.levelEndLabel.textColor = Color.WHITE;
-        this.levelEndLabel.fontSize = 48;
+        // End of level label (start off screen, slides in when level complete)
+        this.levelEndLabel = <Label>this.add.uiElement(UIElementType.LABEL, MBLayers.UI, { position: new Vec2(-400, 180), text: this.levelEndLabelText });
+        this.levelEndLabel.size.set(1400, 100);
+        this.levelEndLabel.borderRadius = 8;
+        this.levelEndLabel.backgroundColor = new Color(34, 32, 52, 0.95);
+        this.levelEndLabel.borderColor = new Color(100, 255, 150, 0.5);
+        this.levelEndLabel.textColor = new Color(100, 255, 150);
+        this.levelEndLabel.fontSize = 56;
         this.levelEndLabel.font = "PixelSimple";
 
         // Add a tween to move the label on screen
         this.levelEndLabel.tweens.add("slideIn", {
             startDelay: 0,
-            duration: 1000,
+            duration: 1200,
             effects: [
                 {
                     property: TweenableProperties.posX,
-                    start: -300,
+                    start: -400,
                     end: 300,
                     ease: EaseFunctionType.OUT_SINE
                 }
@@ -388,6 +427,11 @@ export default abstract class MBLevel extends Scene {
     protected initializeWeaponSystem(): void {
         this.playerWeaponSystem = new PlayerWeapon(50, Vec2.ZERO, 1000, 3, 0, 50);
         this.playerWeaponSystem.initializePool(this, MBLayers.PRIMARY);
+
+        // Assign each particle to the WEAPON physics group
+        for (let particle of this.playerWeaponSystem.getPool()) {
+            particle.setGroup(MBPhysicsGroups.PLAYER_WEAPON);
+        }
     }
     /**
      * Initializes the player, setting the player's initial position to the given position.
@@ -403,13 +447,27 @@ export default abstract class MBLevel extends Scene {
 
         // Add the player to the scene
         this.player = this.add.animatedSprite(key, MBLayers.PRIMARY);
-        this.player.scale.set(1, 1);
+        this.player.scale.set(0.125, 0.125);
         this.player.position.copy(this.playerSpawn);
-        
-        // Give the player physics
-        this.player.addPhysics(new AABB(this.player.position.clone(), this.player.boundary.getHalfSize().clone()));
 
-        // TODO - give the player their flip tween
+        // Give the player a physics body sized to match tiles (half-size 8x8 for a 16x16 body)
+        this.player.addPhysics(new AABB(this.player.position.clone(), new Vec2(8, 8)));
+        this.player.setGroup(MBPhysicsGroups.PLAYER);
+
+        // Give the player a flip tween (plays when transitioning from Walk to Jump)
+        this.player.tweens.add(PlayerTweens.FLIP, {
+            startDelay: 0,
+            duration: 500,
+            effects: [
+                {
+                    property: TweenableProperties.rotation,
+                    start: 0,
+                    end: 2 * Math.PI,
+                    ease: EaseFunctionType.IN_OUT_QUAD,
+                    resetOnComplete: true
+                }
+            ]
+        });
 
         // Give the player a death animation
         this.player.tweens.add(PlayerTweens.DEATH, {
@@ -469,5 +527,10 @@ export default abstract class MBLevel extends Scene {
     // Get the key of the player's jump audio file
     public getJumpAudioKey(): string {
         return this.jumpAudioKey
+    }
+
+    // Get the key of the player's dying audio file
+    public getDyingAudioKey(): string {
+        return this.dyingAudioKey;
     }
 }

@@ -5,10 +5,10 @@ import PlayerState from "./PlayerState";
 export default class Fall extends PlayerState {
 
     onEnter(options: Record<string, any>): void {
-        // If we're falling, the vertical velocity should be >= 0
-        this.parent.velocity.y = 0;
+        // Ensure we're not rising (preserve fall velocity when coming from Jump)
+        if (this.parent.velocity.y < 0) this.parent.velocity.y = 0;
         // Play the fall animation based on the direction the player is facing
-        if (this.parent.velocity.x < 0) {
+        if (this.parent.facingLeft) {
             this.owner.animation.playIfNotAlready(PlayerAnimations.FALL_LEFT);
         } else {
             this.owner.animation.playIfNotAlready(PlayerAnimations.FALL_RIGHT);
@@ -16,12 +16,31 @@ export default class Fall extends PlayerState {
     }
 
     update(deltaT: number): void {
+        // Track previous facing direction to detect changes
+        const wasFacingLeft = this.parent.facingLeft;
+        
+        // Update facing direction while falling
+        super.update(deltaT);
+
+        // Switch animation if direction changed mid-fall
+        if (this.parent.facingLeft !== wasFacingLeft) {
+            if (this.parent.facingLeft) {
+                this.owner.animation.play(PlayerAnimations.FALL_LEFT);
+            } else {
+                this.owner.animation.play(PlayerAnimations.FALL_RIGHT);
+            }
+        }
 
         // If the player hits the ground, start idling and check if we should take damage
         if (this.owner.onGround) {
-            const damage = Math.floor(this.parent.velocity.y / 200);
+            let damage = Math.floor(this.parent.velocity.y / 200);
+            // Reduce damage on first landing only (spawn), not eliminate it
+            if (this.parent.spawnDamageImmunity) {
+                damage = Math.min(damage, 1);
+                this.parent.spawnDamageImmunity = false;
+            }
             if (damage > 0) {
-                if (this.parent.velocity.x < 0) {
+                if (this.parent.facingLeft) {
                     this.owner.animation.play(PlayerAnimations.TAKE_DAMAGE_LEFT);
                 } else {
                     this.owner.animation.play(PlayerAnimations.TAKE_DAMAGE_RIGHT);
@@ -45,6 +64,7 @@ export default class Fall extends PlayerState {
     }
 
     onExit(): Record<string, any> {
+        this.owner.animation.stop();
         return {};
     }
 }

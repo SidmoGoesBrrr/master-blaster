@@ -1,4 +1,4 @@
-import { PlayerStates, PlayerAnimations } from "../PlayerController";
+import { PlayerStates, PlayerAnimations, PlayerTweens } from "../PlayerController";
 import Input from "../../../Wolfie2D/Input/Input";
 import { MBControls } from "../../MBControls";
 import PlayerState from "./PlayerState";
@@ -7,6 +7,12 @@ export default class Walk extends PlayerState {
 
 	onEnter(options: Record<string, any>): void {
 		this.parent.speed = this.parent.MIN_SPEED;
+        let dir = this.parent.inputDir;
+        if (dir.x < 0) {
+            this.owner.animation.play(PlayerAnimations.WALK_LEFT);
+        } else {
+            this.owner.animation.play(PlayerAnimations.WALK_RIGHT);
+        }
 	}
 
 	update(deltaT: number): void {
@@ -22,6 +28,8 @@ export default class Walk extends PlayerState {
 		} 
         // If the player hits the jump key - transition to the Jump state
         else if (Input.isJustPressed(MBControls.JUMP)) {
+            // Play the flip tween when transitioning from Walk to Jump
+            this.owner.tweens.play(PlayerTweens.FLIP);
             this.finished(PlayerStates.JUMP);
         } 
         // If the player is not on the ground, transition to the fall state
@@ -31,7 +39,7 @@ export default class Walk extends PlayerState {
         // Otherwise, move the player
         else {
             // Play walk animation based on direction
-            if (dir.x < 0) {
+            if (this.parent.facingLeft) {
                 this.owner.animation.playIfNotAlready(PlayerAnimations.WALK_LEFT);
             } else {
                 this.owner.animation.playIfNotAlready(PlayerAnimations.WALK_RIGHT);

@@ -14,7 +14,7 @@ export default class Jump extends PlayerState {
         // Play the jump sound for the player
 		this.emitter.fireEvent(GameEventType.PLAY_SOUND, {key: jumpAudio, loop: false, holdReference: false});
         // Play the jump animation based on the direction the player is facing
-        if (this.parent.velocity.x < 0) {
+        if (this.parent.facingLeft) {
             this.owner.animation.play(PlayerAnimations.JUMP_LEFT);
         } else {
             this.owner.animation.play(PlayerAnimations.JUMP_RIGHT);
@@ -22,8 +22,20 @@ export default class Jump extends PlayerState {
 	}
 
 	public update(deltaT: number): void {
+        // Track previous facing direction to detect changes
+        const wasFacingLeft = this.parent.facingLeft;
+        
         // Update the direction the player is facing
         super.update(deltaT);
+
+        // Switch animation if direction changed mid-jump
+        if (this.parent.facingLeft !== wasFacingLeft) {
+            if (this.parent.facingLeft) {
+                this.owner.animation.play(PlayerAnimations.JUMP_LEFT);
+            } else {
+                this.owner.animation.play(PlayerAnimations.JUMP_RIGHT);
+            }
+        }
 
         // If the player hit the ground, start idling
         if (this.owner.onGround) {
